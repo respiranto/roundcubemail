@@ -121,7 +121,8 @@ class rcube_vcard
         if ($charset === null) {
             $charset = RCUBE_CHARSET;
         }
-        $this->raw = self::vcard_decode(self::cleanup($vcard), $charset);
+        $vcard = VObject\Reader::read(self::cleanup($vcard), charset: $charset);
+        $this->raw = self::vcard2raw($vcard);
 
         // find well-known address fields
         $this->displayname = $this->raw['FN'][0][0] ?? '';
@@ -633,16 +634,14 @@ class rcube_vcard
     }
 
     /**
-     * Decodes a vCard block into an array structure
+     * Transform a VCard object to an array structure.
      *
-     * @param string $vcard vCard block to parse
-     * @param string $charset Charset of vCard
+     * @param VObject\Component\VCard vCard
      *
      * @return array Raw data structure
      */
-    private static function vcard_decode($vcard, $charset)
+    private static function vcard2raw($vcard)
     {
-        $vcard = VObject\Reader::read($vcard, charset: $charset);
         $result = [];
 
         foreach ($vcard->children() as $property) {
