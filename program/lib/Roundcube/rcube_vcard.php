@@ -27,7 +27,6 @@ use Sabre\VObject;
  */
 class rcube_vcard
 {
-    private static $values_decoded = false;
     private $raw = [
         'FN' => [],
         'N' => [['', '', '', '', '']],
@@ -90,7 +89,7 @@ class rcube_vcard
      * Constructor
      *
      * @param string $vcard    vCard content
-     * @param string $charset  Charset of string values
+     * @param string $charset  Charset of vCard
      * @param bool   $detect   True if loading a 'foreign' vcard and extra heuristics
      *                         for charset detection is required
      * @param array  $fieldmap Fields mapping definition
@@ -110,29 +109,19 @@ class rcube_vcard
      * Load record from a vcard block.
      *
      * @param string $vcard   vCard string to parse
-     * @param string $charset Charset of string values
+     * @param string $charset Charset of vCard
      * @param bool   $detect  True if loading a 'foreign' vcard and extra heuristics
      *                        for charset detection is required
      */
     public function load($vcard, $charset = RCUBE_CHARSET, $detect = false)
     {
-        self::$values_decoded = false;
-        $this->raw = self::vcard_decode(self::cleanup($vcard));
-
-        // resolve charset parameters
-        if (empty($charset)) {
-            $this->raw = self::charset_convert($this->raw);
+        if ($detect) {
+            $charset = self::detect_encoding($vcard);
         }
-        // vcard has encoded values and charset should be detected
-        // @phpstan-ignore-next-line
-        elseif (self::$values_decoded) {
-            if ($detect) {
-                $charset = self::detect_encoding(self::vcard_encode($this->raw));
-            }
-            if ($charset != RCUBE_CHARSET) {
-                $this->raw = self::charset_convert($this->raw, $charset);
-            }
+        if ($charset === null) {
+            $charset = RCUBE_CHARSET;
         }
+        $this->raw = self::vcard_decode(self::cleanup($vcard), $charset);
 
         // find well-known address fields
         $this->displayname = $this->raw['FN'][0][0] ?? '';
@@ -489,37 +478,6 @@ class rcube_vcard
     }
 
     /**
-     * Convert a whole vcard (array) to UTF-8.
-     * If $force_charset is null, each member value that has a charset parameter will be converted
-     */
-    private static function charset_convert($card, $force_charset = null)
-    {
-        foreach ($card as $key => $node) {
-            foreach ($node as $i => $subnode) {
-                if (!is_array($subnode)) {
-                    continue;
-                }
-
-                $charset = $force_charset;
-                if (!$charset && isset($subnode['charset'][0])) {
-                    $charset = $subnode['charset'][0];
-                }
-
-                if ($charset) {
-                    foreach ($subnode as $j => $value) {
-                        if (is_numeric($j) && is_string($value)) {
-                            $card[$key][$i][$j] = rcube_charset::convert($value, $charset);
-                        }
-                    }
-                    unset($card[$key][$i]['charset']);
-                }
-            }
-        }
-
-        return $card;
-    }
-
-    /**
      * Extends fieldmap definition
      *
      * @param array $map Field mapping definition
@@ -675,15 +633,16 @@ class rcube_vcard
     }
 
     /**
-     * Decodes a vcard block into an array structure
+     * Decodes a vCard block into an array structure
      *
      * @param string $vcard vCard block to parse
+     * @param string $charset Charset of vCard
      *
      * @return array Raw data structure
      */
-    private static function vcard_decode($vcard)
+    private static function vcard_decode($vcard, $charset)
     {
-        $vcard = VObject\Reader::read($vcard);
+        $vcard = VObject\Reader::read($vcard, charset: $charset);
         $result = [];
 
         foreach ($vcard->children() as $property) {
@@ -775,11 +734,9 @@ class rcube_vcard
     {
         switch (strtolower($encoding)) {
             case 'quoted-printable':
-                self::$values_decoded = true;
                 return quoted_printable_decode($value);
             case 'base64':
             case 'b':
-                self::$values_decoded = true;
                 return base64_decode($value);
             default:
                 return $value;
