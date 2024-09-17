@@ -163,6 +163,7 @@ class VCardTest extends TestCase
         $this->assertSame('/9j/4AAQSkZJRgABAQA', substr(base64_encode($vcard['photo']), 0, 19), 'Photo decoding');
 
         $input = str_replace('PHOTO;ENCODING=base64;jpeg:', 'PHOTO:data:image/jpeg;base64,', $input);
+        $input = str_replace('VERSION:3.0', 'VERSION:4.0', $input);
 
         $vcards = \rcube_vcard::import($input);
         $vcard = $vcards[0]->get_assoc();
