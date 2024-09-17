@@ -15,8 +15,11 @@
  +-----------------------------------------------------------------------+
  | Author: Thomas Bruederli <roundcube@gmail.com>                        |
  | Author: Aleksander Machniak <alec@alec.pl>                            |
+ | Author: Einhard Leichtfuß <alguien@respiranto.de>                     |
  +-----------------------------------------------------------------------+
 */
+
+use Sabre\VObject;
 
 /**
  * Logical representation of a vcard-based address record
@@ -104,7 +107,7 @@ class rcube_vcard
     }
 
     /**
-     * Load record from (internal, unfolded) vcard 3.0 format
+     * Load record from a vcard block.
      *
      * @param string $vcard   vCard string to parse
      * @param string $charset Charset of string values
@@ -672,7 +675,7 @@ class rcube_vcard
     }
 
     /**
-     * Decodes a vcard block (vcard 3.0 format, unfolded) into an array structure
+     * Decodes a vcard block into an array structure
      *
      * @param string $vcard vCard block to parse
      *
@@ -680,58 +683,28 @@ class rcube_vcard
      */
     private static function vcard_decode($vcard)
     {
-        // Perform RFC2425 line unfolding and split lines
-        $vcard = str_replace(["\r", "\n ", "\n\t"], '', $vcard);
-        $lines = explode("\n", $vcard);
+        $vcard = VObject\Reader::read($vcard);
         $result = [];
 
-        for ($i = 0; $i < count($lines); $i++) {
-            if (!($pos = strpos($lines[$i], ':'))) {
-                continue;
-            }
+        foreach ($vcard->children() as $property) {
+            $data = $property->getValue();
 
-            $prefix = substr($lines[$i], 0, $pos);
-            $data = substr($lines[$i], $pos + 1);
-
-            if (preg_match('/^(BEGIN|END)$/i', $prefix)) {
-                continue;
-            }
-
-            // convert 2.1-style "EMAIL;internet;home:" to 3.0-style "EMAIL;TYPE=internet;TYPE=home:"
-            if (
-                !empty($result['VERSION'])
-                && $result['VERSION'][0] == '2.1'
-                && preg_match('/^([^;]+);([^:]+)/', $prefix, $regs2)
-                && !preg_match('/^TYPE=/i', $regs2[2])
-            ) {
-                $prefix = $regs2[1];
-                foreach (explode(';', $regs2[2]) as $prop) {
-                    $prefix .= ';' . (strpos($prop, '=') ? $prop : 'TYPE=' . $prop);
-                }
-            }
-
-            if (preg_match_all('/([^\;]+);?/', $prefix, $regs2)) {
+            if (true) {
                 $entry = [];
-                $field = strtoupper($regs2[1][0]);
+                $field = strtoupper($property->name);
                 $enc = null;
 
-                foreach ($regs2[1] as $attrid => $attr) {
-                    $attr = preg_replace('/[\s\t\n\r\0\x0B]/', '', $attr);
-                    [$key, $value] = rcube_utils::explode('=', $attr);
+                foreach ($property->parameters as $param) {
+                    $key = $param->name;
+                    $value = $param->getValue();
 
-                    if ($value) {
+                    if ($value !== null) {
                         if ($key == 'ENCODING') {
                             $value = strtoupper($value);
-                            // add next line(s) to value string if QP line end detected
-                            if ($value == 'QUOTED-PRINTABLE') {
-                                while (preg_match('/=$/', $lines[$i])) {
-                                    $data .= "\n" . $lines[++$i];
-                                }
-                            }
                             $enc = $value == 'BASE64' ? 'B' : $value;
                         } else {
                             $lc_key = strtolower($key);
-                            $value = (array) self::vcard_unquote($value, ',');
+                            $value = $param->getParts();
 
                             if (array_key_exists($lc_key, $entry)) {
                                 $entry[$lc_key] = array_merge((array) $entry[$lc_key], $value);
@@ -739,13 +712,13 @@ class rcube_vcard
                                 $entry[$lc_key] = $value;
                             }
                         }
-                    } elseif ($attrid > 0) {
-                        $entry[strtolower($key)] = true;  // true means attr without =value
+                    } else {
+                        $entry[strtolower($key)] = true;  // true means $param without =value
                     }
                 }
 
                 // decode value
-                if ($enc || !empty($entry['base64'])) {
+                if ($enc !== null || !empty($entry['base64'])) {
                     // save encoding type (#1488432)
                     if ($enc == 'B') {
                         $entry['encoding'] = 'B';
@@ -753,7 +726,17 @@ class rcube_vcard
                         // $entry['base64'] = true;
                     }
 
-                    $data = self::decode_value($data, $enc ?: 'base64');
+                    // Manually decode base64.
+                    //  - This is mostly for backwards compatibility (with data loaded from the database).
+                    //    - $property->getValue() would give us the decoded data iff $property is recognized as of "BINARY" value type.
+                    //      - Notably, this is generally the case for "PHOTO" for vCard version 3.0.
+                    //      - See the following bug w.r.t. the "KEY" and "SOUND" types, though: <https://github.com/sabre-io/vobject/issues/676>
+                    //    - For vCard version 2.1, values may always be legally specified as base64-encoded (there is no "BINARY" value type).
+                    //      - See also <https://github.com/sabre-io/vobject/issues/683>.
+                    //    - We previously ignored the value type and vCard version, and only looked for `ENCODING` and `BASE64` parameters.
+                    if ($enc == 'B' || !empty($entry['base64'])) {
+                        $data = self::decode_value($property->getRawMimeDirValue(), 'base64');
+                    }
                 } elseif ($field == 'PHOTO') {
                     // vCard 4.0 data URI, "PHOTO:data:image/jpeg;base64,..."
                     if (preg_match('/^data:[a-z\/_-]+;base64,/i', $data, $m)) {
@@ -764,7 +747,10 @@ class rcube_vcard
                 }
 
                 if ($enc != 'B' && empty($entry['base64'])) {
-                    $data = self::vcard_unquote($data);
+                    $parts = $property->getParts();
+                    if (count($parts) !== 1) {
+                        $data = $parts;
+                    }
                 }
 
                 if (is_array($data) || strlen($data)) {
