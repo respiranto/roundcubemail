@@ -89,7 +89,7 @@ class rcube_vcard
      * Constructor
      *
      * @param string $vcard    vCard content
-     * @param string $charset  Charset of vCard
+     * @param string $charset  Charset of vCard (only used for parsing of $vcard (if any))
      * @param bool   $detect   True if loading a 'foreign' vcard and extra heuristics
      *                         for charset detection is required
      * @param array  $fieldmap Fields mapping definition
@@ -512,36 +512,28 @@ class rcube_vcard
     {
         $out = [];
 
-        if (($charset = self::detect_encoding($data)) && $charset != RCUBE_CHARSET) {
-            $data = rcube_charset::convert($data, $charset);
-            $data = preg_replace(['/^[\xFE\xFF]{2}/', '/^\xEF\xBB\xBF/', '/^\x00+/'], '', $data); // also remove BOM
-            $charset = RCUBE_CHARSET;
-        }
+        $charset = self::detect_encoding($data);
 
-        $vcard_block = '';
-        $in_vcard_block = false;
+        // Note: We cannot use VObject\Splitter\VCard.
+        //  - It does not support setting a charset.
 
-        foreach (preg_split("/[\r\n]+/", $data) as $line) {
-            if ($in_vcard_block && !empty($line)) {
-                $vcard_block .= $line . "\n";
+        $parser = new VObject\Parser\MimeDir(self::cleanup($data));
+        $parser->setCharset($charset);
+
+        while (true) {
+            try {
+                $vcard = $parser->parse();
+            } catch (VObject\EofException $_) {
+                break;
             }
 
-            $line = trim($line);
+            $obj = new self();
+            $obj->loadFromVCard($vcard);
 
-            if (preg_match('/^END:VCARD$/i', $line)) {
-                // parse vcard
-                $obj = new self($vcard_block, $charset, false, self::$fieldmap);
-
-                // FN and N is required by vCard format (RFC 2426)
-                // on import we can be less restrictive, let's addressbook decide
-                if (!empty($obj->displayname) || !empty($obj->surname) || !empty($obj->firstname) || !empty($obj->email)) {
-                    $out[] = $obj;
-                }
-
-                $in_vcard_block = false;
-            } elseif (preg_match('/^BEGIN:VCARD$/i', $line)) {
-                $vcard_block = $line . "\n";
-                $in_vcard_block = true;
+            // FN and N is required by vCard format (RFC 2426)
+            // on import we can be less restrictive, let's addressbook decide
+            if (!empty($obj->displayname) || !empty($obj->surname) || !empty($obj->firstname) || !empty($obj->email)) {
+                $out[] = $obj;
             }
         }
 
