@@ -122,6 +122,16 @@ class rcube_vcard
             $charset = RCUBE_CHARSET;
         }
         $vcard = VObject\Reader::read(self::cleanup($vcard), charset: $charset);
+        $this->loadFromVCard($vcard);
+    }
+
+    /**
+     * Load record from a vcard object.
+     *
+     * @param VObject\Component\VCard vCard object
+     */
+    private function loadFromVCard($vcard)
+    {
         $this->raw = self::vcard2raw($vcard);
 
         // find well-known address fields
