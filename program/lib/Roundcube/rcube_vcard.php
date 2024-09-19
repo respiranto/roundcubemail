@@ -689,74 +689,72 @@ class rcube_vcard
         foreach ($vcard->children() as $property) {
             $data = $property->getValue();
 
-            if (true) {
-                $entry = [];
-                $field = strtoupper($property->name);
-                $enc = null;
+            $entry = [];
+            $field = strtoupper($property->name);
+            $enc = null;
 
-                foreach ($property->parameters as $param) {
-                    $key = $param->name;
-                    $value = $param->getValue();
+            foreach ($property->parameters as $param) {
+                $key = $param->name;
+                $value = $param->getValue();
 
-                    if ($value !== null) {
-                        if ($key == 'ENCODING') {
-                            $value = strtoupper($value);
-                            $enc = $value == 'BASE64' ? 'B' : $value;
-                        } else {
-                            $lc_key = strtolower($key);
-                            $value = $param->getParts();
-
-                            if (array_key_exists($lc_key, $entry)) {
-                                $entry[$lc_key] = array_merge((array) $entry[$lc_key], $value);
-                            } else {
-                                $entry[$lc_key] = $value;
-                            }
-                        }
+                if ($value !== null) {
+                    if ($key == 'ENCODING') {
+                        $value = strtoupper($value);
+                        $enc = $value == 'BASE64' ? 'B' : $value;
                     } else {
-                        $entry[strtolower($key)] = true;  // true means $param without =value
+                        $lc_key = strtolower($key);
+                        $value = $param->getParts();
+
+                        if (array_key_exists($lc_key, $entry)) {
+                            $entry[$lc_key] = array_merge((array) $entry[$lc_key], $value);
+                        } else {
+                            $entry[$lc_key] = $value;
+                        }
                     }
+                } else {
+                    $entry[strtolower($key)] = true;  // true means $param without =value
+                }
+            }
+
+            // decode value
+            if ($enc !== null || !empty($entry['base64'])) {
+                // save encoding type (#1488432)
+                if ($enc == 'B') {
+                    $entry['encoding'] = 'B';
+                    // should we use vCard 3.0 instead?
+                    // $entry['base64'] = true;
                 }
 
-                // decode value
-                if ($enc !== null || !empty($entry['base64'])) {
-                    // save encoding type (#1488432)
-                    if ($enc == 'B') {
-                        $entry['encoding'] = 'B';
-                        // should we use vCard 3.0 instead?
-                        // $entry['base64'] = true;
-                    }
-
-                    // Manually decode base64.
-                    //  - This is mostly for backwards compatibility (with data loaded from the database).
-                    //    - $property->getValue() would give us the decoded data iff $property is recognized as of "BINARY" value type.
-                    //      - Notably, this is generally the case for "PHOTO" for vCard version 3.0.
-                    //      - See the following bug w.r.t. the "KEY" and "SOUND" types, though: <https://github.com/sabre-io/vobject/issues/676>
-                    //    - For vCard version 2.1, values may always be legally specified as base64-encoded (there is no "BINARY" value type).
-                    //      - See also <https://github.com/sabre-io/vobject/issues/683>.
-                    //    - We previously ignored the value type and vCard version, and only looked for `ENCODING` and `BASE64` parameters.
-                    if ($enc == 'B' || !empty($entry['base64'])) {
-                        $data = self::decode_value($property->getRawMimeDirValue(), 'base64');
-                    }
-                } elseif ($field == 'PHOTO') {
-                    // vCard 4.0 data URI, "PHOTO:data:image/jpeg;base64,..."
-                    if (preg_match('/^data:[a-z\/_-]+;base64,/i', $data, $m)) {
-                        $entry['encoding'] = $enc = 'B';
-                        $data = substr($data, strlen($m[0]));
-                        $data = self::decode_value($data, 'base64');
-                    }
+                // Manually decode base64.
+                //  - This is mostly for backwards compatibility (with data loaded from the database).
+                //    - $property->getValue() would give us the decoded data iff $property is recognized as of "BINARY" value type.
+                //      - Notably, this is generally the case for "PHOTO" for vCard version 3.0.
+                //      - See the following bug w.r.t. the "KEY" and "SOUND" types, though: <https://github.com/sabre-io/vobject/issues/676>
+                //    - For vCard version 2.1, values may always be legally specified as base64-encoded (there is no "BINARY" value type).
+                //      - See also <https://github.com/sabre-io/vobject/issues/683>.
+                //    - We previously ignored the value type and vCard version, and only looked for `ENCODING` and `BASE64` parameters.
+                if ($enc == 'B' || !empty($entry['base64'])) {
+                    $data = self::decode_value($property->getRawMimeDirValue(), 'base64');
                 }
-
-                if ($enc != 'B' && empty($entry['base64'])) {
-                    $parts = $property->getParts();
-                    if (count($parts) !== 1) {
-                        $data = $parts;
-                    }
+            } elseif ($field == 'PHOTO') {
+                // vCard 4.0 data URI, "PHOTO:data:image/jpeg;base64,..."
+                if (preg_match('/^data:[a-z\/_-]+;base64,/i', $data, $m)) {
+                    $entry['encoding'] = $enc = 'B';
+                    $data = substr($data, strlen($m[0]));
+                    $data = self::decode_value($data, 'base64');
                 }
+            }
 
-                if (is_array($data) || strlen($data)) {
-                    $entry = array_merge($entry, (array) $data);
-                    $result[$field][] = $entry;
+            if ($enc != 'B' && empty($entry['base64'])) {
+                $parts = $property->getParts();
+                if (count($parts) !== 1) {
+                    $data = $parts;
                 }
+            }
+
+            if (is_array($data) || strlen($data)) {
+                $entry = array_merge($entry, (array) $data);
+                $result[$field][] = $entry;
             }
         }
 
