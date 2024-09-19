@@ -89,7 +89,8 @@ class rcube_vcard
      * Constructor
      *
      * @param string $vcard    vCard content
-     * @param string $charset  Charset of vCard (only used for parsing of $vcard (if any))
+     * @param string $charset  Charset of vCard (only used for parsing of
+     *                         $vcard (if any))
      * @param bool   $detect   True if loading a 'foreign' vcard and extra heuristics
      *                         for charset detection is required
      * @param array  $fieldmap Fields mapping definition
@@ -119,7 +120,7 @@ class rcube_vcard
             $charset = self::detect_encoding($vcard);
         }
         $vcard = VObject\Reader::read(self::cleanup($vcard), charset: $charset);
-        $this->loadFromVCard($vcard);
+        $this->load_from_vcard($vcard);
     }
 
     /**
@@ -127,7 +128,7 @@ class rcube_vcard
      *
      * @param VObject\Component\VCard $vcard vCard object
      */
-    private function loadFromVCard($vcard)
+    private function load_from_vcard($vcard)
     {
         $this->raw = self::vcard2raw($vcard);
 
@@ -525,7 +526,7 @@ class rcube_vcard
             }
 
             $obj = new self();
-            $obj->loadFromVCard($vcard);
+            $obj->load_from_vcard($vcard);
 
             // FN and N is required by vCard format (RFC 2426)
             // on import we can be less restrictive, let's addressbook decide
@@ -683,15 +684,28 @@ class rcube_vcard
                 }
 
                 // Manually decode base64.
-                //  - This is mostly for backwards compatibility (with data loaded from the database).
-                //    - $property->getValue() would give us the decoded data iff $property is recognized as of "BINARY" value type.
-                //      - Notably, this is generally the case for "PHOTO" for vCard version 3.0.
-                //      - See the following bug w.r.t. the "KEY" and "SOUND" types, though: <https://github.com/sabre-io/vobject/issues/676>
-                //    - For vCard version 2.1, values may always be legally specified as base64-encoded (there is no "BINARY" value type).
-                //      - See also <https://github.com/sabre-io/vobject/issues/683>.
-                //    - We previously ignored the value type and vCard version, and only looked for `ENCODING` and `BASE64` parameters.
+                //  - This is mostly for backwards compatibility (with data
+                //    loaded from the database).
+                //    - $property->getValue() would give us the decoded data
+                //      iff $property is recognized as of "BINARY" value type.
+                //      - Notably, this is generally the case for "PHOTO" for
+                //        vCard version 3.0.
+                //      - See the following bug w.r.t. the "KEY" and "SOUND"
+                //        types, though:
+                //        <https://github.com/sabre-io/vobject/issues/676>
+                //    - For vCard version 2.1, values may always be legally
+                //      specified as base64-encoded (there is no "BINARY"
+                //      value type).
+                //      - See also
+                //        <https://github.com/sabre-io/vobject/issues/683>.
+                //    - We previously ignored the value type and vCard
+                //      version, and only looked for `ENCODING` and `BASE64`
+                //      parameters.
                 if ($enc == 'B' || !empty($entry['base64'])) {
-                    $data = self::decode_value($property->getRawMimeDirValue(), 'base64');
+                    $data = self::decode_value(
+                        $property->getRawMimeDirValue(),
+                        'base64'
+                    );
                 }
             } elseif ($field == 'PHOTO') {
                 // vCard 4.0 data URI, "PHOTO:data:image/jpeg;base64,..."
