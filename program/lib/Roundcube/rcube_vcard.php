@@ -125,7 +125,7 @@ class rcube_vcard
     /**
      * Load record from a vcard object.
      *
-     * @param VObject\Component\VCard vCard object
+     * @param VObject\Component\VCard $vcard vCard object
      */
     private function loadFromVCard($vcard)
     {
@@ -635,7 +635,7 @@ class rcube_vcard
     /**
      * Transform a VCard object to an array structure.
      *
-     * @param VObject\Component\VCard vCard
+     * @param VObject\Component\VCard $vcard vCard
      *
      * @return array Raw data structure
      */
