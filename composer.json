@@ -16,7 +16,7 @@
         "pear/pear-core-minimal": "~1.10.1",
         "roundcube/plugin-installer": "~0.3.5",
         "roundcube/rtf-html-php": "^2.1",
-        "sabre/vobject": "~4.5"
+        "sabre/vobject": "^4.5"
     },
     "require-dev": {
         "ergebnis/composer-normalize": "^2.13",
