@@ -118,9 +118,6 @@ class rcube_vcard
         if ($detect) {
             $charset = self::detect_encoding($vcard);
         }
-        if ($charset === null) {
-            $charset = RCUBE_CHARSET;
-        }
         $vcard = VObject\Reader::read(self::cleanup($vcard), charset: $charset);
         $this->loadFromVCard($vcard);
     }

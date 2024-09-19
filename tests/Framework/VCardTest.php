@@ -25,7 +25,7 @@ class VCardTest extends TestCase
 
     public function test_parse_two()
     {
-        $vcard = new \rcube_vcard(file_get_contents($this->_srcpath('johndoe.vcf')), null);
+        $vcard = new \rcube_vcard(file_get_contents($this->_srcpath('johndoe.vcf')));
 
         $this->assertFalse($vcard->business, 'Identify as private record');
         $this->assertSame('John Doë', $vcard->displayname, 'Decode according to charset attribute');
@@ -39,7 +39,7 @@ class VCardTest extends TestCase
      */
     public function test_parse_three()
     {
-        $vcard = new \rcube_vcard(file_get_contents($this->_srcpath('johndoe.vcf')), null);
+        $vcard = new \rcube_vcard(file_get_contents($this->_srcpath('johndoe.vcf')));
 
         $vcf = $vcard->export();
         $this->assertMatchesRegularExpression('/TEL;TYPE=cell:\+987654321/', $vcf, 'Return CELL instead of MOBILE (import)');
@@ -57,7 +57,7 @@ class VCardTest extends TestCase
     public function test_parse_four()
     {
         $vcard = "BEGIN:VCARD\nVERSION:3.0\nN:last\\;;first\\\\;middle\\\\\\;\\\\;prefix;\nFN:test\nEND:VCARD";
-        $vcard = new \rcube_vcard($vcard, null);
+        $vcard = new \rcube_vcard($vcard);
         $vcard = $vcard->get_assoc();
 
         $this->assertSame('last;', $vcard['surname'], 'Decode backslash character');
@@ -72,7 +72,7 @@ class VCardTest extends TestCase
     public function test_parse_five()
     {
         $vcard = "BEGIN:VCARD\nVERSION:3.0\nN:last\\\\\\a;fir\\nst\nURL:http\\://domain.tld\nEND:VCARD";
-        $vcard = new \rcube_vcard($vcard, null);
+        $vcard = new \rcube_vcard($vcard);
         $vcard = $vcard->get_assoc();
 
         $this->assertSame('last\a', $vcard['surname'], 'Decode dummy backslash character');
@@ -210,7 +210,7 @@ class VCardTest extends TestCase
     public function test_bday_v4()
     {
         $vcard = "BEGIN:VCARD\nVERSION:4.0\nN:last\\;;first\\\\;middle\\\\\\;\\\\;prefix;\nFN:test\nBDAY:19800202\nEND:VCARD";
-        $vcard = new \rcube_vcard($vcard, null);
+        $vcard = new \rcube_vcard($vcard);
         $vcard = $vcard->get_assoc();
 
         $this->assertSame('1980-02-02', $vcard['birthday'][0]);
